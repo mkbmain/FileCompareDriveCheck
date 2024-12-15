@@ -1,36 +1,72 @@
-﻿using System.Security.Cryptography;
+﻿using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using Mkb.DapperRepo.Repo;
+using Mkb.DapperRepo.Search;
 
 namespace Size;
 
 class Program
 {
-    private const string Path = "/home/mkb/output.json";
-    public const string RootDrive = "/media/mkb/80ea538c-3752-46c3-9421-3bd24fce14af/";
+    private const string SqlToCreateTable = """
+                                            create table if not exists Files 
+                                            (Id  integer constraint Files_pk primary key autoincrement,
+                                             FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  Size       INT);
+                                            """;
 
-    private const string SqlToCreateTable = @"create table if not exists Files
-(
-    Id         integer
-        constraint Files_pk
-            primary key autoincrement,
-    FileName   TEXT,
-    FilePath   TEXT,
-    Hash       text,
-    PrettySize text,
-    Size       INT
-);";
+    static async Task Compare()
+    {
+        var oldRepo = new SqlRepoAsync(() =>
+            new SqliteConnection($"Data Source=/media/mkb/80ea538c-3752-46c3-9421-3bd24fce14af/Harddrive.sqlite"));
+        var newRepo =
+            new SqlRepoAsync(() => new SqliteConnection($"Data Source=/media/mkb/8tbSamsung/Harddrive.sqlite"));
+        var allOldRecords = await oldRepo.GetAll<DbFile>();
+        var allNewRecords = await newRepo.GetAll<DbFile>();
+
+        var oldLookUp = allOldRecords.GroupBy(w => w.FilePath).ToDictionary(g => g.Key, g => g.ToList());
+        var newLookUp = allNewRecords.GroupBy(w => w.FilePath).ToDictionary(g => g.Key, g => g.ToList());
+
+        var itemsMissing = oldLookUp.Where(w => !newLookUp.ContainsKey(w.Key)).Select(w => w.Key).ToArray();
+        var itemsMissingOld = newLookUp.Where(w => !oldLookUp.ContainsKey(w.Key)).Select(q => q.Key).ToArray();
+
+        var union = string.Join(Environment.NewLine, itemsMissing.Union(itemsMissingOld));
+        Console.WriteLine($"Missing{Environment.NewLine}{union}");
+        foreach (var item in newLookUp)
+        {
+            var oldItem = oldLookUp[item.Key];
+
+            if (item.Value.Count > 1 || oldItem.Count > 1)
+            {
+                Debugger.Break();
+            }
+
+            var hash = oldItem.First().Hash;
+            var thisHash = item.Value.First().Hash;
+            if (hash != thisHash)
+            {
+                Console.WriteLine($"Hash: {thisHash}, Hash: {hash} Diffrence ");
+                Debugger.Break();
+            }
+        }
+    }
 
     static async Task Main(string[] args)
     {
-        var repo = new SqlRepoAsync(() => new SqliteConnection("Data Source=/home/mkb/Harddrive2.sqlite"));
+        var rootDrive = string.Join(" ", args);
+        if (!Directory.Exists(rootDrive))
+        {
+            Console.WriteLine("Location does not exist.");
+        }
+
+        var path = Path.Combine("/home/mkb/", "Harddrive.sqlite");
+        var repo = new SqlRepoAsync(() => new SqliteConnection($"Data Source={path}"));
         await repo.Execute(SqlToCreateTable);
-        await PopulateDb(repo);
-        await Update(repo);
+        await PopulateDb(repo, rootDrive);
+        await Update(repo, rootDrive);
     }
 
-    private static readonly string[] Suffix = { "", "K", "M", "G", "T", "P", "E" }; //Longs run out around EB
+    private static readonly string[] Suffix = ["", "K", "M", "G", "T", "P", "E"]; //Longs run out around EB
 
     private static string BytesToString(long byteCount)
     {
@@ -41,7 +77,7 @@ class Program
         return $"{(Math.Sign(byteCount) * num)}{Suffix[place]}B";
     }
 
-    private static string CalculateMd5(string filename)
+    private static string? CalculateMd5(string filename)
     {
         using var md5 = MD5.Create();
         using var stream = File.OpenRead(filename);
@@ -50,17 +86,28 @@ class Program
     }
 
 
-    static async Task Update(SqlRepoAsync repoAsync)
+    private static async Task Update(SqlRepoAsync repoAsync, string rootDrive)
     {
-        var files = await repoAsync.GetAll<DbFile>();
-
-        foreach (var file in files.Where(w => w.Hash is null))
+        Console.WriteLine("Update");
+        var files =
+            (await repoAsync.Search(new DbFile(), SearchCriteria.Create(nameof(DbFile.Hash), SearchType.IsNull)))
+            .ToArray();
+        var date = DateTime.Now;
+        int i = 0;
+        foreach (var file in files)
         {
-            var fullPath = System.IO.Path.Combine(RootDrive, file.FilePath);
+            i++;
+            var fullPath = Path.Combine(rootDrive, file.FilePath);
             if (!File.Exists(fullPath))
             {
                 await repoAsync.Delete(file);
                 continue;
+            }
+
+            if ((DateTime.Now - date).TotalSeconds > 180)
+            {
+                date = DateTime.Now;
+                Console.WriteLine($"{date:t} {i} / {files.Length}");
             }
 
             file.Hash = CalculateMd5(fullPath);
@@ -68,15 +115,15 @@ class Program
         }
     }
 
-    static async Task PopulateDb(SqlRepoAsync repo)
+    static async Task PopulateDb(SqlRepoAsync repo, string rootDrive)
     {
         const int chunkSize = 250;
 
-        var allFileNodes = Directory.GetFiles(RootDrive, "*.*", SearchOption.AllDirectories)
+        var allFileNodes = Directory.GetFiles(rootDrive, "*.*", SearchOption.AllDirectories)
             .Select(w => new FileInfo(w))
             .Select(w => new
             {
-                RelativePath = w.FullName.Replace(Program.RootDrive, ""),
+                RelativePath = w.FullName.Replace(rootDrive, ""),
                 FileInfo = w
             }).ToArray();
 
@@ -107,7 +154,7 @@ class Program
         }
 
         await Insert(toInsert, repo);
-        
+
         foreach (var item in dbLookup.Where(item => !fileNodeLookup.Contains(item.Key)).Chunk(chunkSize))
         {
             var sql = $"Delete from files where id in ({string.Join(",", item.Select(q => q.Value.Id))})";
@@ -115,9 +162,9 @@ class Program
         }
     }
 
-    static async Task Insert(IEnumerable<string> lines, SqlRepoAsync repo)
+    private static async Task Insert(List<string> lines, SqlRepoAsync repo)
     {
-        if(!lines.Any()) return;
+        if (!lines.Any()) return;
         const string rawInsert = "insert into Files(FileName, FilePath, Hash, PrettySize,Size)\nvalues \n";
         var sql = rawInsert + string.Join(",", lines);
         await repo.Execute(sql);
@@ -127,8 +174,8 @@ class Program
 [Mkb.DapperRepo.Attributes.SqlTableName("Files")]
 class DbFile
 {
-    [Mkb.DapperRepo.Attributes.PrimaryKey] public int Id { get; set; }
-    public string Hash { get; set; }
+    [Mkb.DapperRepo.Attributes.PrimaryKey] public int? Id { get; set; }
+    public string? Hash { get; set; }
     public long Size { get; set; }
     public string FileName { get; set; }
     public string PrettySize { get; set; }
