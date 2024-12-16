@@ -57,10 +57,12 @@ class Program
         if (!Directory.Exists(rootDrive))
         {
             Console.WriteLine("Location does not exist.");
+            return;
         }
 
         var path = Path.Combine("/home/mkb/", "Harddrive.sqlite");
-        var repo = new SqlRepoAsync(() => new SqliteConnection($"Data Source={path}"));
+        var lite = new SqliteConnection($"Data Source={path}");
+        var repo = new SqlRepoAsync(() => lite);
         await repo.Execute(SqlToCreateTable);
         await PopulateDb(repo, rootDrive);
         await Update(repo, rootDrive);
