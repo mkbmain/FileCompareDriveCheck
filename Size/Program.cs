@@ -60,7 +60,7 @@ class Program
             return;
         }
 
-        var path = Path.Combine("/home/mkb/", "Harddrive.sqlite");
+        var path = Path.Combine(rootDrive, "Harddrive.sqlite");
         var lite = new SqliteConnection($"Data Source={path}");
         var repo = new SqlRepoAsync(() => lite);
         await repo.Execute(SqlToCreateTable);
