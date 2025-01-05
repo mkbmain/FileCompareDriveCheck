@@ -9,18 +9,34 @@ namespace Size;
 
 class Program
 {
+    private const string NameOfDbFiles = "Harddrive.sqlite";
+
     private const string SqlToCreateTable = """
                                             create table if not exists Files 
                                             (Id  integer constraint Files_pk primary key autoincrement,
                                              FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  Size       INT);
                                             """;
 
-    static async Task Compare()
+    private static async Task Compare(IEnumerable<string> args)
     {
+        var pathOne = args.First();
+        if (!Directory.Exists(pathOne))
+        {
+            Console.WriteLine($"Path {pathOne} does not exist.");
+            return;
+        }
+
+        var pathTwo = args.Skip(1).First();
+        if (!Directory.Exists(pathTwo))
+        {
+            Console.WriteLine($"Path {pathTwo} does not exist.");
+            return;
+        }
+
         var oldRepo = new SqlRepoAsync(() =>
-            new SqliteConnection($"Data Source=/media/mkb/80ea538c-3752-46c3-9421-3bd24fce14af/Harddrive.sqlite"));
+            new SqliteConnection($"Data Source={Path.Combine(pathOne, NameOfDbFiles)}"));
         var newRepo =
-            new SqlRepoAsync(() => new SqliteConnection($"Data Source=/media/mkb/8tbSamsung/Harddrive.sqlite"));
+            new SqlRepoAsync(() => new SqliteConnection($"Data Source={Path.Combine(pathTwo, NameOfDbFiles)}"));
         var allOldRecords = await oldRepo.GetAll<DbFile>();
         var allNewRecords = await newRepo.GetAll<DbFile>();
 
@@ -36,22 +52,46 @@ class Program
         {
             var oldItem = oldLookUp[item.Key];
 
-            if (item.Value.Count > 1 || oldItem.Count > 1)
-            {
-                Debugger.Break();
-            }
-
             var hash = oldItem.First().Hash;
             var thisHash = item.Value.First().Hash;
-            if (hash != thisHash)
-            {
-                Console.WriteLine($"Hash: {thisHash}, Hash: {hash} Diffrence ");
-                Debugger.Break();
-            }
+            if (hash == thisHash) continue;
+            Console.WriteLine($"Hash: {thisHash}, Hash: {hash} difference ");
         }
     }
 
-    static async Task Main(string[] args)
+    private static async Task Main(string[] args)
+    {
+        const string text = """
+                            Options
+                            Build {PathToBuild}
+                                eg. Build /media/mkb/8tbSamsung/
+
+                            Compare {PathOne} {PathTwo}
+                                eg. Compare /media/mkb/8tbSamsung/ /media/mkb/LinuxSSD/
+                            """;
+        if (args.Length < 2)
+        {
+            Console.WriteLine(text);
+            return;
+        }
+
+        switch (args[0].ToLower())
+        {
+            case "-h":
+            case "--help":
+                Console.WriteLine(text);
+                break;
+            case "build":
+                await BuildDb(args.Skip(1));
+                return;
+            case "compare":
+                await Compare(args.Skip(1));
+                return;
+        }
+    }
+
+
+    private static async Task BuildDb(IEnumerable<string> args)
     {
         var rootDrive = string.Join(" ", args);
         if (!Directory.Exists(rootDrive))
@@ -60,7 +100,7 @@ class Program
             return;
         }
 
-        var path = Path.Combine(rootDrive, "Harddrive.sqlite");
+        var path = Path.Combine(rootDrive, NameOfDbFiles);
         var lite = new SqliteConnection($"Data Source={path}");
         var repo = new SqlRepoAsync(() => lite);
         await repo.Execute(SqlToCreateTable);
@@ -117,7 +157,7 @@ class Program
         }
     }
 
-    static async Task PopulateDb(SqlRepoAsync repo, string rootDrive)
+    private static async Task PopulateDb(SqlRepoAsync repo, string rootDrive)
     {
         const int chunkSize = 250;
 
