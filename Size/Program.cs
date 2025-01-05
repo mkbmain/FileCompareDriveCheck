@@ -57,6 +57,7 @@ class Program
             if (hash == thisHash) continue;
             Console.WriteLine($"Hash: {thisHash}, Hash: {hash} difference ");
         }
+        Console.WriteLine("Done");
     }
 
     private static async Task Main(string[] args)
