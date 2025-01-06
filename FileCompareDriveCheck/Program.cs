@@ -1,11 +1,9 @@
-﻿using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text.Json.Serialization;
+﻿using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Mkb.DapperRepo.Repo;
 using Mkb.DapperRepo.Search;
 
-namespace Size;
+namespace FileCompareDriveCheck;
 
 class Program
 {
@@ -14,7 +12,7 @@ class Program
     private const string SqlToCreateTable = """
                                             create table if not exists Files 
                                             (Id  integer constraint Files_pk primary key autoincrement,
-                                             FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  Size       INT);
+                                             FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  FileCompareDriveCheck       INT);
                                             """;
 
     private static async Task Compare(IEnumerable<string> args)
@@ -208,7 +206,7 @@ class Program
     private static async Task Insert(List<string> lines, SqlRepoAsync repo)
     {
         if (!lines.Any()) return;
-        const string rawInsert = "insert into Files(FileName, FilePath, Hash, PrettySize,Size)\nvalues \n";
+        const string rawInsert = "insert into Files(FileName, FilePath, Hash, PrettySize,FileCompareDriveCheck)\nvalues \n";
         var sql = rawInsert + string.Join(",", lines);
         await repo.Execute(sql);
     }
