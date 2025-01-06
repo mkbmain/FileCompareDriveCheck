@@ -15,6 +15,15 @@ class Program
                                              FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  FileCompareDriveCheck       INT);
                                             """;
 
+    private const string CommandText = """
+                                       Options
+                                       Build {PathToBuild}
+                                           eg. Build /media/mkb/8tbSamsung/
+
+                                       Compare {PathOne} {PathTwo}
+                                           eg. Compare /media/mkb/8tbSamsung/ /media/mkb/LinuxSSD/
+                                       """;
+
     private static async Task Compare(IEnumerable<string> args)
     {
         var pathOne = args.First();
@@ -55,22 +64,15 @@ class Program
             if (hash == thisHash) continue;
             Console.WriteLine($"Hash: {thisHash}, Hash: {hash} difference ");
         }
+
         Console.WriteLine("Done");
     }
 
     private static async Task Main(string[] args)
     {
-        const string text = """
-                            Options
-                            Build {PathToBuild}
-                                eg. Build /media/mkb/8tbSamsung/
-
-                            Compare {PathOne} {PathTwo}
-                                eg. Compare /media/mkb/8tbSamsung/ /media/mkb/LinuxSSD/
-                            """;
         if (args.Length < 2)
         {
-            Console.WriteLine(text);
+            Console.WriteLine(CommandText);
             return;
         }
 
@@ -78,7 +80,7 @@ class Program
         {
             case "-h":
             case "--help":
-                Console.WriteLine(text);
+                Console.WriteLine(CommandText);
                 break;
             case "build":
                 await BuildDb(args.Skip(1));
@@ -205,9 +207,9 @@ class Program
 
     private static async Task Insert(List<string> lines, SqlRepoAsync repo)
     {
-        if (!lines.Any()) return;
+        if (lines.Count < 1) return;
         const string rawInsert = "insert into Files(FileName, FilePath, Hash, PrettySize,FileCompareDriveCheck)\nvalues \n";
-        var sql = rawInsert + string.Join(",", lines);
+        var sql = $"{rawInsert}{string.Join(",", lines)}";
         await repo.Execute(sql);
     }
 }
@@ -215,7 +217,9 @@ class Program
 [Mkb.DapperRepo.Attributes.SqlTableName("Files")]
 class DbFile
 {
-    [Mkb.DapperRepo.Attributes.PrimaryKey] public int? Id { get; set; }
+    [Mkb.DapperRepo.Attributes.PrimaryKey]
+    public int? Id { get; set; }
+
     public string? Hash { get; set; }
     public long Size { get; set; }
     public string FileName { get; set; }
