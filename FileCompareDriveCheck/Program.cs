@@ -70,9 +70,7 @@ class Program
 
     private static async Task Main(string[] args)
     {
-        var part = args.FirstOrDefault()?.ToLower();
-
-        switch (part)
+        switch (args.FirstOrDefault()?.ToLower())
         {
             default:
                 Console.WriteLine(CommandText);
