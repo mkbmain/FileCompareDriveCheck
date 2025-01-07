@@ -70,16 +70,11 @@ class Program
 
     private static async Task Main(string[] args)
     {
-        if (args.Length < 2)
-        {
-            Console.WriteLine(CommandText);
-            return;
-        }
+        var part = args.FirstOrDefault()?.ToLower();
 
-        switch (args[0].ToLower())
+        switch (part)
         {
-            case "-h":
-            case "--help":
+            default:
                 Console.WriteLine(CommandText);
                 break;
             case "build":
@@ -208,7 +203,8 @@ class Program
     private static async Task Insert(List<string> lines, SqlRepoAsync repo)
     {
         if (lines.Count < 1) return;
-        const string rawInsert = "insert into Files(FileName, FilePath, Hash, PrettySize,FileCompareDriveCheck)\nvalues \n";
+        const string rawInsert =
+            "insert into Files(FileName, FilePath, Hash, PrettySize,FileCompareDriveCheck)\nvalues \n";
         var sql = $"{rawInsert}{string.Join(",", lines)}";
         await repo.Execute(sql);
     }
