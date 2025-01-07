@@ -12,7 +12,7 @@ class Program
     private const string SqlToCreateTable = """
                                             create table if not exists Files 
                                             (Id  integer constraint Files_pk primary key autoincrement,
-                                             FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  FileCompareDriveCheck       INT);
+                                             FileName   TEXT, FilePath   TEXT,  Hash       text,  PrettySize text,  Size       INT);
                                             """;
 
     private const string CommandText = """
@@ -201,9 +201,7 @@ class Program
     private static async Task Insert(List<string> lines, SqlRepoAsync repo)
     {
         if (lines.Count < 1) return;
-        const string rawInsert =
-            "insert into Files(FileName, FilePath, Hash, PrettySize,FileCompareDriveCheck)\nvalues \n";
-        var sql = $"{rawInsert}{string.Join(",", lines)}";
+        var sql = $"insert into Files(FileName, FilePath, Hash, PrettySize,Size) values {string.Join(",", lines)}";
         await repo.Execute(sql);
     }
 }
