@@ -70,6 +70,7 @@ class Program
 
     private static async Task Main(string[] args)
     {
+        args = new[] { "build", "/media/mkb/Seagate Backup Plus Drive/" };
         switch (args.FirstOrDefault()?.ToLower())
         {
             default:
@@ -171,6 +172,7 @@ class Program
         {
             if (!dbLookup.TryGetValue(fileNode.RelativePath, out var file))
             {
+                if (!File.Exists(fileNode.FileInfo.FullName)) continue;
                 toInsert.Add(
                     $"('{fileNode.FileInfo.Name.Replace("'", "''")}','{fileNode.RelativePath.Replace("'", "''")}',null,'{BytesToString(fileNode.FileInfo.Length)}',{fileNode.FileInfo.Length})");
                 if (toInsert.Count > chunkSize)
@@ -209,8 +211,7 @@ class Program
 [Mkb.DapperRepo.Attributes.SqlTableName("Files")]
 class DbFile
 {
-    [Mkb.DapperRepo.Attributes.PrimaryKey]
-    public int? Id { get; set; }
+    [Mkb.DapperRepo.Attributes.PrimaryKey] public int? Id { get; set; }
 
     public string? Hash { get; set; }
     public long Size { get; set; }
