@@ -134,7 +134,6 @@ class Program
         for (var i = 0; i < files.Length; i++)
         {
             var file = files[i];
-            countInBatch++;
             var fullPath = Path.Combine(rootDrive, file.FilePath);
             totalSizeDone += file.Size;
             if (!File.Exists(fullPath))
@@ -147,8 +146,8 @@ class Program
             {
                 date = DateTime.Now;
                 Console.WriteLine(
-                    $"{date:t} Batch{countInBatch}, {i} / {files.Length}, Left {files.Length - i}, total done {BytesToString(totalSizeDone)}");
-                countInBatch = 0;
+                    $"{date:t} Batch{i - countInBatch}, {i} / {files.Length}, Left {files.Length - i}, total done {BytesToString(totalSizeDone)}");
+                countInBatch = i;
             }
 
             file.Hash = CalculateMd5(fullPath);
