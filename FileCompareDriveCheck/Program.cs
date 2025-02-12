@@ -57,12 +57,12 @@ class Program
         Console.WriteLine($"Missing{Environment.NewLine}{union}");
         foreach (var item in newLookUp)
         {
-            var oldItem = oldLookUp[item.Key];
+            if (!oldLookUp.TryGetValue(item.Key, out var oldItem)) continue;
 
             var hash = oldItem.First().Hash;
             var thisHash = item.Value.First().Hash;
             if (hash == thisHash) continue;
-            Console.WriteLine($"Hash: {thisHash}, Hash: {hash} difference ");
+            Console.WriteLine($"File {item.Key}  -- Hash: {thisHash}, Hash: {hash} difference ");
         }
 
         Console.WriteLine("Done");
@@ -209,8 +209,7 @@ class Program
 [Mkb.DapperRepo.Attributes.SqlTableName("Files")]
 class DbFile
 {
-    [Mkb.DapperRepo.Attributes.PrimaryKey]
-    public int? Id { get; set; }
+    [Mkb.DapperRepo.Attributes.PrimaryKey] public int? Id { get; set; }
 
     public string? Hash { get; set; }
     public long Size { get; set; }
