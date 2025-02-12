@@ -70,7 +70,6 @@ class Program
 
     private static async Task Main(string[] args)
     {
-        args = new[] { "build", "/media/mkb/Seagate Backup Plus Drive/" };
         switch (args.FirstOrDefault()?.ToLower())
         {
             default:
@@ -130,21 +129,26 @@ class Program
             (await repoAsync.Search(new DbFile(), SearchCriteria.Create(nameof(DbFile.Hash), SearchType.IsNull)))
             .ToArray();
         var date = DateTime.Now;
-        int i = 0;
-        foreach (var file in files)
+        long totalSizeDone = 0;
+        int countInBatch = 0;
+        for (var i = 0; i < files.Length; i++)
         {
-            i++;
+            var file = files[i];
+            countInBatch++;
             var fullPath = Path.Combine(rootDrive, file.FilePath);
+            totalSizeDone += file.Size;
             if (!File.Exists(fullPath))
             {
                 await repoAsync.Delete(file);
                 continue;
             }
 
-            if ((DateTime.Now - date).TotalSeconds > 180)
+            if ((DateTime.Now - date).TotalSeconds > 60)
             {
                 date = DateTime.Now;
-                Console.WriteLine($"{date:t} {i} / {files.Length}");
+                Console.WriteLine(
+                    $"{date:t} Batch{countInBatch}, {i} / {files.Length}, Left {files.Length - i}, total done {BytesToString(totalSizeDone)}");
+                countInBatch = 0;
             }
 
             file.Hash = CalculateMd5(fullPath);
