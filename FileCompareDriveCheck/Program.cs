@@ -145,8 +145,9 @@ class Program
             if ((DateTime.Now - date).TotalSeconds > 60)
             {
                 date = DateTime.Now;
-                Console.WriteLine(
-                    $"{date:t} Batch{i - countInBatch}, {i} / {files.Length}, Left {files.Length - i}, total done {BytesToString(totalSizeDone)}");
+                var readableSize = BytesToString(totalSizeDone);
+                Console.Write(
+                    $"{date:t} Batch {i - countInBatch}, {i} / {files.Length}, Left {files.Length - i}, total {readableSize}\n");
                 countInBatch = i;
             }
 
