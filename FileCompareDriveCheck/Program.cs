@@ -17,6 +17,8 @@ class Program
 
     private const string CommandText = """
                                        Options
+                                       Dupes {PathToFolderWithDriveDb/OrDb}
+                                            eg. dupes /media/mkb/8tbSamsung or dupes /media/mkb/8tbSamsung/Harddrive.sqlite
                                        Build {PathToBuild}
                                            eg. Build /media/mkb/8tbSamsung/
 
@@ -40,10 +42,9 @@ class Program
             return;
         }
 
-        var oldRepo = new SqlRepoAsync(() =>
-            new SqliteConnection($"Data Source={Path.Combine(pathOne, NameOfDbFiles)}"));
-        var newRepo =
-            new SqlRepoAsync(() => new SqliteConnection($"Data Source={Path.Combine(pathTwo, NameOfDbFiles)}"));
+        var oldRepo = GetRepoForPath(pathOne);
+        var newRepo = GetRepoForPath(pathTwo);
+        if (oldRepo is null || newRepo is null) return;
         var allOldRecords = await oldRepo.GetAll<DbFile>();
         var allNewRecords = await newRepo.GetAll<DbFile>();
 
@@ -75,6 +76,9 @@ class Program
             default:
                 Console.WriteLine(CommandText);
                 break;
+            case "dupes":
+                await FindDupes(args.Skip(1));
+                return;
             case "build":
                 await BuildDb(args.Skip(1));
                 return;
@@ -84,22 +88,46 @@ class Program
         }
     }
 
+    private static async Task FindDupes(IEnumerable<string> args)
+    {
+        var rootDrive = string.Join(" ", args);
+        var repo = GetRepoForPath(rootDrive);
+        if (repo is null) return;
+        var files = (await repo.GetAll<DbFile>()).GroupBy(w => w.Hash).Where(q => q.Count() > 1);
+
+        foreach (var item in files.OrderByDescending(q => q.First().Size))
+        {
+            var parts = item.Select(w => $"{w.FileName},\t{w.Size},\t{w.FilePath}");
+            Console.WriteLine(string.Join(Environment.NewLine, parts));
+            Console.WriteLine(Environment.NewLine + Environment.NewLine + Environment.NewLine +
+                              "Press Enter for more..." + Environment.NewLine);
+            Console.ReadLine();
+        }
+    }
+
 
     private static async Task BuildDb(IEnumerable<string> args)
     {
         var rootDrive = string.Join(" ", args);
-        if (!Directory.Exists(rootDrive))
-        {
-            Console.WriteLine("Location does not exist.");
-            return;
-        }
-
-        var path = Path.Combine(rootDrive, NameOfDbFiles);
-        var lite = new SqliteConnection($"Data Source={path}");
-        var repo = new SqlRepoAsync(() => lite);
+        var repo = GetRepoForPath(rootDrive);
+        if (repo is null) return;
         await repo.Execute(SqlToCreateTable);
         await PopulateDb(repo, rootDrive);
         await Update(repo, rootDrive);
+    }
+
+    private static SqlRepoAsync? GetRepoForPath(string inputPath)
+    {
+        if (!Directory.Exists(inputPath) && !File.Exists(inputPath))
+        {
+            Console.WriteLine("Location does not exist.");
+            return null;
+        }
+
+        var path = File.Exists(inputPath) ? inputPath : Path.Combine(inputPath, NameOfDbFiles);
+        var lite = new SqliteConnection($"Data Source={path}");
+        var repo = new SqlRepoAsync(() => lite);
+        return repo;
     }
 
     private static readonly string[] Suffix = ["", "K", "M", "G", "T", "P", "E"]; //Longs run out around EB
@@ -171,7 +199,7 @@ class Program
         var allDbRecords = await repo.GetAll<DbFile>();
         var dbLookup = allDbRecords.GroupBy(w => w.FilePath).ToDictionary(q => q.Key, q => q.First());
         var toInsert = new List<string>();
-        var fileNodeLookup = allFileNodes.Select(w => w.RelativePath).ToHashSet();
+
         foreach (var fileNode in allFileNodes)
         {
             if (!dbLookup.TryGetValue(fileNode.RelativePath, out var file))
@@ -196,7 +224,8 @@ class Program
         }
 
         await Insert(toInsert, repo);
-
+        
+        var fileNodeLookup = allFileNodes.Select(w => w.RelativePath).ToHashSet();
         foreach (var item in dbLookup.Where(item => !fileNodeLookup.Contains(item.Key)).Chunk(chunkSize))
         {
             var sql = $"Delete from files where id in ({string.Join(",", item.Select(q => q.Value.Id))})";
